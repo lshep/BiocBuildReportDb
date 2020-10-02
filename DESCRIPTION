@@ -1,0 +1,14 @@
+Package: BiocBuildReportDb
+Title: Create and Manager a Database specifically for Bioconductor build report statuses
+Version: 0.99.0
+Authors@R: 
+    person(given = "Lori",
+           family = "Shepherd",
+           role = c("aut", "cre"),
+           email = "lori.shepherd@roswellpark.org")
+Description: The BiocBuildReportDB package contains functions to create and manage a database of build report statuses. It contains functions to pull down and populate the database with a current day's report. It also contains pre-built queries for common questions regarding the building status of a current Bioconductor package.
+License: Artistic-2.0
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
+biocViews: Infrastructure, DataImport, ThirdPartyClient
