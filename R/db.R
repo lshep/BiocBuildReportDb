@@ -6,7 +6,10 @@
 #' @import tidyr
 #' @import plyr match_df
 #' @import dplyr
-#' 
+#'
+
+REPORT_DIR <- "/home/shepherd/Projects/ReportDatabase/BuildReportDatabase/TempCopyOfFiles/"
+
 update_build_database <- function(dbname,
                                   versions=.get_current_bioc_versions(),
                                   repos=c("bioc", "data-experiment","workflow", "data-annnotation")){
@@ -31,8 +34,11 @@ update_build_database <- function(dbname,
         repo="bioc"
         message("working on repo: ", repo)
 
-        file <- paste0("https://master.bioconductor.org/checkResults/",ver,"/",
-                       repo, "-LATEST/STATUS_DB.txt")
+        file <- paste0(
+            "https://master.bioconductor.org/checkResults/",
+            ver, "/",
+            repo, "-LATEST/STATUS_DB.txt"
+        )
         date_report <- cache_info(HEAD(file))[["modified"]]
 
 
@@ -121,7 +127,7 @@ update_build_database <- function(dbname,
 
         pkg <- status[i, "package"]
         dcf <-
-            read.dcf(paste0("/home/shepherd/Projects/ReportDatabase/BuildReportDatabase/TempCopyOfFiles/", ver, "/bioc/gitlog/git-log-", pkg,".dcf"))
+            read.dcf(paste0(REPORT_DIR, ver, "/bioc/gitlog/git-log-", pkg,".dcf"))
         gitcommitid[i] <- dcf[,"Last Commit"]
         gitcommitdate[i] <- dcf[,"Last Changed Date"]
     }
@@ -132,14 +138,14 @@ update_build_database <- function(dbname,
 
 .get_builder_table <- function(con, ver){
     
-    ActiveBuilders <- system2("ls", args= paste0("/home/shepherd/Projects/ReportDatabase/BuildReportDatabase/TempCopyOfFiles/", ver, "/bioc/nodes"), stdout=TRUE)
+    ActiveBuilders <- system2("ls", args= paste0(REPORT_DIR, ver, "/bioc/nodes"), stdout=TRUE)
     df <- matrix("", nrow=length(ActiveBuilders), ncol=4)
     rownames(df) <- ActiveBuilders
     colnames(df) <- c("r_version", "platform", "os", "bioc_version")
          
     for(i in ActiveBuilders){
         text <-
-            readLines(paste0("/home/shepherd/Projects/ReportDatabase/BuildReportDatabase/TempCopyOfFiles/", ver, "/bioc/nodes/",i,"/NodeInfo/R-sessionInfo.txt"),
+            readLines(paste0(REPORT_DIR, ver, "/bioc/nodes/",i,"/NodeInfo/R-sessionInfo.txt"),
                       n=3)
         df[i,] <-  c(trimws(gsub(pattern="Platform:|Running under:", replacement="", text)), ver)
         
