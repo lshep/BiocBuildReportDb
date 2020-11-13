@@ -20,13 +20,13 @@ update_build_database <- function(dbname,
     stopifnot(is.character(versions), all(versions %in% .get_valid_versions()))
     stopifnot(is.character(repos),
               all(repos %in% c("bioc", "data-experiment","workflow", "data-annnotation")))
-   
+
     con <- .connect_to_database(dbname)
-    
+
     for(ver in versions){
-        
+
         message("working on release: ", ver)
-        
+
         ##
         ## TODO: test with multiple repo types
         ##
@@ -43,8 +43,8 @@ update_build_database <- function(dbname,
 
 
         ## Update Report Table
-        
-        if(.needs_database_update(con, date_report)){    
+
+        if(.needs_database_update(con, date_report)){
             message("Duplicate Report. Not Adding Data.")
             next
         }else{
@@ -53,7 +53,7 @@ update_build_database <- function(dbname,
 
         ## Get Status Table Info Part 1
         status <- .parse_STATUSDB_file(file, ver)
-        
+
         ## Get Builder Table Info
         builder <- .get_builder_table(con, ver)
 
@@ -62,16 +62,16 @@ update_build_database <- function(dbname,
         status$report_id = unname(reports$report_id)
 
         status <- select(status, c("builder_id", "report_id", "package",
-                                   "git_commit_id", "git_commit_date", "stage", "status")) 
+                                   "git_commit_id", "git_commit_date", "stage", "status"))
         dbAppendTable(con, "status", status)
 
-        
+
         ## TODO: need to check skipped file for errors to add to status
-        
+
     } ## loop over versions
 
     ## Disconnect from the database
-    dbDisconnect(con)
+    .disconnect_from_database(con)
 }
 
 
@@ -89,24 +89,24 @@ update_build_database <- function(dbname,
     con <- dbConnect(RMariaDB::MariaDB(), group = dbname)
 }
 
+.disconnect_from_database <- function(con){
+    dbDisconnect(con)
+}
+
 .needs_database_update <- function(con, date_report){
-    
+
+    date_formatted <- format(date_report,"%Y-%m-%d")
     # check if date is already in database
-    qry <- paste0("SELECT * FROM reports WHERE date='",date_report,"';")
-    res <- dbSendQuery(con, qry)
-    tbl_reports<- dbFetch(res)
-    dbClearResult(res)
-    nrow(tbl_reports) != 0    
+    tbl_reports <- tbl(con, "reports") %>% filter(str_detect(date, date_formatted)) %>% collect(Inf)
+    nrow(tbl_reports) != 0
 }
 
 .get_reports_table <- function(con, date_report, repo){
 
     repo_type <- ifelse(repo == "bioc","software", repo)
     dbAppendTable(con, "reports", data.frame(date=date_report, repo_type=repo_type))
-    qry <- paste0("SELECT * FROM reports WHERE date='",date_report,"';")
-    res <- dbSendQuery(con, qry)
-    tbl_reports<- dbFetch(res)
-    dbClearResult(res)
+    date_formatted <- format(date_report,"%Y-%m-%d")
+    tbl_reports <- tbl(con, "reports") %>% filter(str_detect(date, date_formatted)) %>% collect(Inf)
     tbl_reports
 }
 
@@ -122,7 +122,7 @@ update_build_database <- function(dbname,
 
     gitcommitid <- rep("", dim(status)[1])
     gitcommitdate <- rep("", dim(status)[1])
-         
+
     for(i in seq_len(dim(status)[1])){
 
         pkg <- status[i, "package"]
@@ -137,54 +137,50 @@ update_build_database <- function(dbname,
 
 
 .get_builder_table <- function(con, ver){
-    
+
     ActiveBuilders <- system2("ls", args= paste0(REPORT_DIR, ver, "/bioc/nodes"), stdout=TRUE)
     df <- matrix("", nrow=length(ActiveBuilders), ncol=4)
     rownames(df) <- ActiveBuilders
     colnames(df) <- c("r_version", "platform", "os", "bioc_version")
-         
+
     for(i in ActiveBuilders){
         text <-
             readLines(paste0(REPORT_DIR, ver, "/bioc/nodes/",i,"/NodeInfo/R-sessionInfo.txt"),
                       n=3)
         df[i,] <-  c(trimws(gsub(pattern="Platform:|Running under:", replacement="", text)), ver)
-        
+
     }
-    
-    res <- dbSendQuery(con, "SELECT * FROM builders")
-    builders <- dbFetch(res)
-    dbClearResult(res)
-    
-   ## verify there is an entry in the database and get builder_id for df 
+
+    builders <-  tbl(con, "builders") %>% collect(Inf)
+
+    ## verify there is an entry in the database and get builder_id for df
     builder_id <- rep(NA_integer_, nrow(df))
     found <- match_df(builders, as.data.frame(df))
     builder_id[match(unname(unlist(found["builder"])),  rownames(df))] = found$builder_id
-         
+
 
     ## Update builders table if needed
     if (nrow(df) != nrow(found)){
-        
+
         if(nrow(found) == 0){
             not_fnd <- cbind(as.data.frame(df), builder=rownames(df))
-        }else{              
+        }else{
             not_fnd <- df[-(match(found$builder, rownames(df))),,drop=FALSE]
             not_fnd <- cbind(not_fnd, builder=rownames(not_fnd))
             not_fnd <- as.data.frame(not_fnd) %>% select(colnames(builders)[-1])
         }
-        dbAppendTable(con, "builders", not_fnd)    
-        
-        res <- dbSendQuery(con, "SELECT * FROM builders")
-        builders <- dbFetch(res)
-        dbClearResult(res)
-        
+        dbAppendTable(con, "builders", not_fnd)
+
+        builders <-  tbl(con, "builders") %>% collect(Inf)
+
         builder_id <- rep(NA_integer_, nrow(df))
         found <- match_df(builders, as.data.frame(df))
         builder_id[match(unname(unlist(found["builder"])),  rownames(df))] = found$builder_id
-        
+
     } else {
         message("All builders found")
     }
-    
+
     df <- cbind(builder_id, df)
     df
 }
